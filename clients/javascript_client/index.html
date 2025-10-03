@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Telemetry Client</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Verdana', sans-serif;
+            background-color: #1a1a1a;
+            color: white;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .main-container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            background-color: #2b2b2b;
+        }
+
+        .header {
+            background-color: #2C2C2C;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            font-weight: bold;
+            color: white;
+        }
+
+        .content {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            flex: 1;
+            background-color: #1a1a1a;
+            gap: 10px;
+            padding: 20px;
+        }
+
+        .left-grid, .right-grid {
+            display: grid;
+            grid-template-rows: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .telemetry-card {
+            background-color: #2C2C2C;
+            border-radius: 10px;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+
+        .telemetry-title {
+            font-size: 16px;
+            font-weight: bold;
+            color: white;
+            margin-bottom: 5px;
+        }
+
+        .telemetry-value {
+            font-size: 36px;
+            font-weight: bold;
+            color: white;
+            margin: 0;
+        }
+
+        .telemetry-unit {
+            font-size: 14px;
+            color: white;
+            margin-top: 0;
+        }
+
+        .direction-value {
+            font-size: 28px;
+            font-weight: bold;
+            color: white;
+            margin: 0;
+        }
+
+        .direction-icon {
+            font-size: 20px;
+            color: white;
+            margin-top: 0;
+        }
+
+        .car-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: transparent;
+            border-radius: 15px;
+            padding: 20px;
+        }
+
+        .car-image {
+            max-width: 100%;
+            max-height: 100%;
+            width: 400px;
+            height: 500px;
+            object-fit: contain;
+        }
+
+        .car-fallback {
+            font-size: 20px;
+            color: white;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="main-container">
+        <!-- HEADER -->
+        <div class="header">
+            <h1>NetDrive</h1>
+        </div>
+
+        <!-- CONTENIDO PRINCIPAL -->
+        <div class="content">
+            <!-- GRID IZQUIERDO (Velocidad y Batería) -->
+            <div class="left-grid">
+                <!-- VELOCIDAD -->
+                <div class="telemetry-card">
+                    <div class="telemetry-title">VELOCIDAD</div>
+                    <div class="telemetry-value">65</div>
+                    <div class="telemetry-unit">km/h</div>
+                </div>
+
+                <!-- BATERÍA -->
+                <div class="telemetry-card">
+                    <div class="telemetry-title">BATERÍA</div>
+                    <div class="telemetry-value">82</div>
+                    <div class="telemetry-unit">%</div>
+                </div>
+            </div>
+
+            <!-- FRAME CENTRAL PARA IMAGEN DEL CARRO -->
+            <div class="car-container">
+                <img src="images/auto.png" alt="Auto" class="car-image" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                <div class="car-fallback" style="display: none;">IMAGEN DEL CARRO</div>
+            </div>
+
+            <!-- GRID DERECHO (Temperatura y Dirección) -->
+            <div class="right-grid">
+                <!-- TEMPERATURA -->
+                <div class="telemetry-card">
+                    <div class="telemetry-title">TEMPERATURA</div>
+                    <div class="telemetry-value">28</div>
+                    <div class="telemetry-unit">°C</div>
+                </div>
+
+                <!-- DIRECCIÓN -->
+                <div class="telemetry-card">
+                    <div class="telemetry-title">DIRECCIÓN</div>
+                    <div class="direction-value">NORTE</div>
+                    <div class="direction-icon">N</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
+

@@ -1,0 +1,21 @@
+def receive_thread(): #funcion que recibe en su propio hilo
+    while True:
+        try:
+            data = client.recv(1024)  # Recibe datos del servidor
+            if not data:
+                print("Servidor desconectado.")
+                break
+            print("\n[TELEMETRÍA] ", data.decode())  # Parsea los datos decodificados y los retorna
+            speed, temp, dir, battery = parse_data(data.decode())
+            #tc.update_telemetry(speed, temp, dir, battery)
+            #car_module.car.updateState(speed, temp, dir, battery) #actualiza el módulo del carro
+            
+        except Exception as e:
+            print("Error recibiendo datos:", e)
+            break
+
+def update_telemetry_data():
+    while True:
+        time.sleep(10)
+        tc.update_telemetry(0, 0, "NONE", 0)
+
