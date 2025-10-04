@@ -171,6 +171,76 @@
             </div>
         </div>
     </div>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    // Conectar con tu backend (cambia IP y puerto según tu servidor)
+    const socket = new WebSocket("ws://127.0.0.1:2000");
+
+    socket.onopen = () => {
+        console.log("Conectado al servidor WebSocket");
+    };
+
+    socket.onerror = (err) => {
+        console.error("Error en la conexión WebSocket:", err);
+    };
+
+    socket.onclose = () => {
+        console.log("Conexión cerrada");
+    };
+
+    //Escuchar mensajes entrantes del backend
+    socket.onmessage = (event) => {
+        console.log("Telemetría recibida:", event.data);
+        parseTelemetry(event.data);
+    };
+
+    // Parsear el mensaje recibido
+    function parseTelemetry(raw) {
+        // Eliminar el prefijo y sufijo si vienen
+        raw = raw.replace("PTT", "").replace("END", "").trim();
+
+        // Dividir por ";" y procesar cada par clave=valor
+        const parts = raw.split(";").filter(p => p.includes("="));
+        const data = {};
+        parts.forEach(p => {
+            const [key, value] = p.split("=");
+            data[key.trim()] = value.trim();
+        });
+
+        console.log("Datos parseados:", data);
+        updateTelemetryUI(data);
+    }
+
+    //Actualizar valores en el HTML en tiempo real
+    function updateTelemetryUI(data) {
+        // Si el valor existe, actualizarlo
+        if (data.speed !== undefined) {
+            document.querySelector(".left-grid .telemetry-card:nth-child(1) .telemetry-value").textContent = data.speed;
+        }
+        if (data.battery !== undefined) {
+            document.querySelector(".left-grid .telemetry-card:nth-child(2) .telemetry-value").textContent = data.battery;
+        }
+        if (data.temp !== undefined) {
+            document.querySelector(".right-grid .telemetry-card:nth-child(1) .telemetry-value").textContent = data.temp;
+        }
+        if (data.dir !== undefined) {
+            document.querySelector(".right-grid .telemetry-card:nth-child(2) .direction-value").textContent = data.dir;
+            document.querySelector(".right-grid .telemetry-card:nth-child(2) .direction-icon").textContent = data.dir[0] || "?";
+        }
+    }
+
+    //Enviar comandos al backend (si lo necesitas)
+    window.sendCommand = function(cmd) {
+        if (socket.readyState === WebSocket.OPEN) {
+            socket.send(cmd);
+            console.log("Comando enviado:", cmd);
+        } else {
+            console.warn("WebSocket no está abierto");
+        }
+    };
+});
+</script>
 </body>
 </html>
 
