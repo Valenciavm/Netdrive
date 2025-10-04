@@ -7,24 +7,45 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-#include "car.h"  // Importamos la lógica del carro
+#include "car.h"     // Lógica del carro
+#include "auth.h"    // Sistema de autenticación
+#include "protocol.h" // Protocolo PTT
 
+// ====== Variables globales ======
+#define MAX_CLIENTS 10
+int clients_fds[MAX_CLIENTS];
+int num_clients = 0;
+struct CarState car;
+pthread_mutex_t clients_lock = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t car_lock = PTHREAD_MUTEX_INITIALIZER;
 
+// Protocolo PTT v2 - Ahora definido en protocol.h
 
-// ====== Protocolo PTT ======
-struct Message {
-    char header[4];   // "PTT"
-    char action[12];  // "UPLOAD", "DATA", etc.
-    char data[150];   // Telemetría del carro
-    char footer[4];   // "END"
-};
+// ====== Gestión de clientes ======
+void add_client(int client_fd) {
+    pthread_mutex_lock(&clients_lock);
+    for (int i = 0; i < MAX_CLIENTS; i++) {
+        if (clients_fds[i] == 0) {
+            clients_fds[i] = client_fd;
+            num_clients++;
+            printf("[GESTIÓN] Cliente fd=%d agregado. Total: %d\n", client_fd, num_clients);
+            break;
+        }
+    }
+    pthread_mutex_unlock(&clients_lock);
+}
 
-// Serializa el struct Message en un buffer de bytes
-void parseMessage(struct Message msg, char *buffer) {
-    memcpy(buffer, msg.header, sizeof(msg.header));
-    memcpy(buffer + sizeof(msg.header), msg.action, sizeof(msg.action));
-    memcpy(buffer + sizeof(msg.header) + sizeof(msg.action), msg.data, sizeof(msg.data));
-    memcpy(buffer + sizeof(msg.header) + sizeof(msg.action) + sizeof(msg.data), msg.footer, sizeof(msg.footer));
+void remove_client(int client_fd) {
+    pthread_mutex_lock(&clients_lock);
+    for (int i = 0; i < MAX_CLIENTS; i++) {
+        if (clients_fds[i] == client_fd) {
+            clients_fds[i] = 0;
+            num_clients--;
+            printf("[GESTIÓN] Cliente fd=%d eliminado. Total: %d\n", client_fd, num_clients);
+            break;
+        }
+    }
+    pthread_mutex_unlock(&clients_lock);
 }
 
 // ====== Manejo de clientes (cada uno en su hilo) ======
@@ -34,12 +55,20 @@ void *handle_client(void *arg) {
 
     char buffer[1024];
     bool connection_active = true;
+    Session *session = NULL;
 
-    /*// Estado del carro individual por cliente
-    struct CarState car;
-    initCar(&car);
-*/
-    printf("[HILO] Cliente conectado (fd=%d)\n", client_fd);
+    // Obtener IP y puerto del cliente
+    struct sockaddr_in client_addr;
+    socklen_t addr_len = sizeof(client_addr);
+    getpeername(client_fd, (struct sockaddr *)&client_addr, &addr_len);
+    char client_ip[16];
+    inet_ntop(AF_INET, &client_addr.sin_addr, client_ip, sizeof(client_ip));
+    int client_port = ntohs(client_addr.sin_port);
+
+    printf("[HILO] Cliente conectado (fd=%d) desde %s:%d\n", client_fd, client_ip, client_port);
+    
+    // Agregar cliente a la lista
+    add_client(client_fd);
 
     while (connection_active) {
         memset(buffer, 0, sizeof(buffer));
@@ -50,90 +79,204 @@ void *handle_client(void *arg) {
             break;
         }
 
-        printf("[HILO] Mensaje recibido de fd=%d: %s\n", client_fd, buffer);
-
-        if (strncmp(buffer, "EXIT", 4) == 0) {
-            printf("[HILO] Cliente pidió salir.\n");
-            break;
+        // Parsear mensaje del protocolo
+        ProtocolMessage msg;
+        if (parse_message(buffer, &msg) < 0) {
+            printf("[HILO] Mensaje inválido de fd=%d\n", client_fd);
+            
+            ProtocolMessage error_msg;
+            create_message(&error_msg, ACTION_ERROR, RESP_INVALID);
+            char error_buffer[170];
+            serialize_message(error_msg, error_buffer);
+            send(client_fd, error_buffer, strlen(error_buffer), 0);
+            continue;
         }
 
-        // ====== Actualizar el carro según comando ======
-        updateCarTelemetry(&car, buffer);
+        printf("[HILO] fd=%d | Action=%s | Data=%s\n", client_fd, msg.action, msg.data);
 
-        // ====== Preparar respuesta ======
-        struct Message response;
-        strcpy(response.header, "PTT");
-        strcpy(response.action, "DATA");
+        // ====== MANEJO DE AUTENTICACIÓN ======
+        if (strcmp(msg.action, ACTION_LOGIN) == 0) {
+            printf("[AUTH] Procesando LOGIN | Data: '%.50s'\n", msg.data);
+            
+            char username[MAX_USERNAME], password[MAX_PASSWORD];
+            memset(username, 0, sizeof(username));
+            memset(password, 0, sizeof(password));
+            
+            parse_login_data(msg.data, username, password);
+            
+            printf("[AUTH] Intentando autenticar: user='%s' pass='%s'\n", username, password);
 
-        char telemetry[150];
-        generateCarTelemetry(car, telemetry, sizeof(telemetry));
-        strcpy(response.data, telemetry);
+            UserRole role;
+            if (authenticate_user(username, password, &role)) {
+                session = create_session(client_fd, username, role, client_ip, client_port);
+                
+                printf("[AUTH] Login exitoso: %s (role=%d) fd=%d\n", username, role, client_fd);
+                
+                char response_data[150];
+                const char *role_str = (role == ROLE_ADMIN) ? "ADMIN" : "OBSERVER";
+                snprintf(response_data, sizeof(response_data), "%s;role=%s;token=%s", 
+                         RESP_AUTH_OK, role_str, session->token);
+                
+                ProtocolMessage response;
+                create_message(&response, ACTION_OK, response_data);
+                char resp_buffer[170];
+                serialize_message(response, resp_buffer);
+                send(client_fd, resp_buffer, strlen(resp_buffer), 0);
+                
+                printf("[AUTH] Respuesta enviada a fd=%d\n", client_fd);
+            } else {
+                printf("[AUTH] Login fallido: user='%s' pass='%s' fd=%d\n", username, password, client_fd);
+                
+                ProtocolMessage response;
+                create_message(&response, ACTION_ERROR, RESP_AUTH_FAIL);
+                char resp_buffer[170];
+                serialize_message(response, resp_buffer);
+                send(client_fd, resp_buffer, strlen(resp_buffer), 0);
+            }
+            continue;
+        }
 
-        strcpy(response.footer, "END");
+        // ====== VERIFICAR AUTENTICACIÓN PARA OTROS COMANDOS ======
+        session = get_session_by_fd(client_fd);
+        if (!session || !session->is_authenticated) {
+            printf("[AUTH] Cliente no autenticado intenta acceder: fd=%d\n", client_fd);
+            
+            ProtocolMessage response;
+            create_message(&response, ACTION_DENIED, "NOT_AUTHENTICATED");
+            char resp_buffer[170];
+            serialize_message(response, resp_buffer);
+            send(client_fd, resp_buffer, strlen(resp_buffer), 0);
+            continue;
+        }
 
-        char msg_buffer[sizeof(response)];
-        memset(msg_buffer, 0, sizeof(msg_buffer));
-        parseMessage(response, msg_buffer);
+        // ====== MANEJO DE COMANDOS (solo ADMIN) ======
+        if (strcmp(msg.action, ACTION_COMMAND) == 0) {
+            if (session->role != ROLE_ADMIN) {
+                printf("[AUTH] Cliente sin permisos intenta comando: %s fd=%d\n", session->username, client_fd);
+                
+                ProtocolMessage response;
+                create_message(&response, ACTION_DENIED, RESP_PERM_DENIED);
+                char resp_buffer[170];
+                serialize_message(response, resp_buffer);
+                send(client_fd, resp_buffer, strlen(resp_buffer), 0);
+                continue;
+            }
 
-        send(client_fd, msg_buffer, sizeof(response), 0);
+            // Ejecutar comando
+            pthread_mutex_lock(&car_lock);
+            updateCarTelemetry(&car, msg.data);
+            pthread_mutex_unlock(&car_lock);
+
+            printf("[COMMAND] Ejecutado '%s' por %s fd=%d\n", msg.data, session->username, client_fd);
+
+            ProtocolMessage response;
+            create_message(&response, ACTION_OK, RESP_CMD_OK);
+            char resp_buffer[170];
+            serialize_message(response, resp_buffer);
+            send(client_fd, resp_buffer, strlen(resp_buffer), 0);
+            continue;
+        }
+
+        // ====== LISTAR USUARIOS (solo ADMIN) ======
+        if (strcmp(msg.action, ACTION_LIST) == 0) {
+            if (session->role != ROLE_ADMIN) {
+                ProtocolMessage response;
+                create_message(&response, ACTION_DENIED, RESP_PERM_DENIED);
+                char resp_buffer[170];
+                serialize_message(response, resp_buffer);
+                send(client_fd, resp_buffer, strlen(resp_buffer), 0);
+                continue;
+            }
+
+            char users_list[150];
+            get_active_users_list(users_list, sizeof(users_list));
+
+            printf("[LIST] Usuarios solicitados por %s fd=%d\n", session->username, client_fd);
+
+            ProtocolMessage response;
+            create_message(&response, ACTION_OK, users_list);
+            char resp_buffer[170];
+            serialize_message(response, resp_buffer);
+            send(client_fd, resp_buffer, strlen(resp_buffer), 0);
+            continue;
+        }
+
+        // Comando EXIT
+        if (strncmp(msg.data, "EXIT", 4) == 0) {
+            printf("[HILO] Cliente %s pidió salir.\n", session->username);
+            break;
+        }
     }
 
+    // Remover sesión y cliente
+    if (session) {
+        printf("[HILO] Cerrando sesión de %s (fd=%d)\n", session->username, client_fd);
+        remove_session(client_fd);
+    }
+    remove_client(client_fd);
     close(client_fd);
     pthread_exit(NULL);
 }
 
 
 void *send_telemetry(void *arg) {
-    int client_fd = *(int *)arg;
-    free(arg);
+    (void)arg; // No se usa
 
     while (1) {
-        sleep(5); // Enviar cada 5 segundos
+        sleep(10); // Enviar cada 10 segundos (según requerimiento)
 
-        pthread_mutex_lock(&clients_lock);
-
+        // Preparar telemetría
         char data[150];
+        pthread_mutex_lock(&car_lock);
         generateCarTelemetry(car, data, sizeof(data));
+        pthread_mutex_unlock(&car_lock);
 
-        struct Message telemetry;
-        strcpy(telemetry.header, "PTT");
-        strcpy(telemetry.action, "DATA");
-        strcpy(telemetry.data, data);//TODO CAMBIAR ESTO
-        strcpy(telemetry.footer, "END");
+        ProtocolMessage telemetry;
+        create_message(&telemetry, ACTION_DATA, data);
 
-        char msg_bufer[sizeof(telemetry)];
-        memset(msg_bufer, 0, sizeof(msg_bufer));
-        parseMessage(telemetry, msg_bufer);
+        char msg_buffer[170];
+        serialize_message(telemetry, msg_buffer);
 
-        for(int i = 0; i < MAX_CLIENTS; i++){
-
+        // Enviar solo a clientes autenticados
+        pthread_mutex_lock(&clients_lock);
+        for (int i = 0; i < MAX_CLIENTS; i++) {
             int fd = clients_fds[i];
 
-            if (send(fd, msg_bufer, sizeof(msg_bufer), 0) < 0) { //Send() devuelve el número de bytes enviados, si es -1 hubo un error 
+            // Verificar que esté autenticado
+            Session *session = get_session_by_fd(fd);
+            if (fd > 0 && session && session->is_authenticated) {
+                if (send(fd, msg_buffer, strlen(msg_buffer), 0) < 0) {
                     perror("[TELEMETRIA] Error enviando a cliente");
                 } else {
-                    printf("[TELEMETRIA] Enviada a fd=%d\n", fd);
+                    printf("[TELEMETRIA] Enviada a %s (fd=%d)\n", session->username, fd);
                 }
-
         }
+        }
+        pthread_mutex_unlock(&clients_lock);
     }
 
-    close(client_fd);
     pthread_exit(NULL);
 }
 
-#define MAX_CLIENTS 10
-int clients_fds[MAX_CLIENTS];
-struct Carstate car;
-pthread_mutex_t clients_lock = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t car_lock = PTHREAD_MUTEX_INITIALIZER;
-
-
-
 // ====== MAIN ======
 int main() {
+    // Inicializar array de clientes
+    for (int i = 0; i < MAX_CLIENTS; i++) {
+        clients_fds[i] = 0;
+    }
 
     initCar(&car);
+    init_auth_system();
+    
+    printf("==============================================\n");
+    printf("   SERVIDOR NETDRIVE - PTT v2\n");
+    printf("==============================================\n");
+    printf("Usuarios disponibles:\n");
+    printf("  - admin / admin123 (ADMIN)\n");
+    printf("  - observer / observer123 (OBSERVER)\n");
+    printf("  - user1 / pass1 (OBSERVER)\n");
+    printf("  - root / root (ADMIN)\n");
+    printf("==============================================\n\n");
 
     int server_fd;
     struct sockaddr_in server_addr, client_addr;
@@ -160,8 +303,9 @@ int main() {
 
     printf("[SERVIDOR] Escuchando en el puerto 2000...\n");
 
-    pthread_t broadcast_thread; //Se crea un hilo encargado de enviar telemetría a todos los clientes
-    pthread_create(&broadcast_thread, NULL, send_telemetry, (void *)); 
+    pthread_t broadcast_thread; // Se crea un hilo encargado de enviar telemetría a todos los clientes
+    pthread_create(&broadcast_thread, NULL, send_telemetry, NULL);
+    pthread_detach(broadcast_thread); 
 
 
     while (1) {

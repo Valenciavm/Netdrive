@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Telemetry Client</title>
+    <title>NetDrive - Telemetry System</title>
     <style>
         * {
             margin: 0;
@@ -12,235 +12,791 @@
         }
 
         body {
-            font-family: 'Verdana', sans-serif;
-            background-color: #1a1a1a;
-            color: white;
-            height: 100vh;
-            overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #0a0a0a;
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
         }
 
-        .main-container {
-            display: flex;
-            flex-direction: column;
-            height: 100vh;
-            background-color: #2b2b2b;
+        .hidden {
+            display: none !important;
+        }
+
+        /* === LOGIN SCREEN === */
+        .login-container {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 10px;
+            padding: 40px;
+            width: 400px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+        }
+
+        .login-container h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #00ff88;
+            font-size: 28px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #aaa;
+            font-size: 14px;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px;
+            background: #0a0a0a;
+            border: 1px solid #333;
+            border-radius: 5px;
+            color: #fff;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #00ff88;
+        }
+
+        .login-btn {
+            width: 100%;
+            padding: 14px;
+            background: #00ff88;
+            color: #000;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .login-btn:hover:not(:disabled) {
+            background: #00cc6f;
+            transform: translateY(-2px);
+        }
+
+        .login-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .login-status {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 5px;
+            text-align: center;
+            font-size: 14px;
+        }
+
+        .login-status.error {
+            background: rgba(255, 0, 0, 0.1);
+            border: 1px solid #ff0000;
+            color: #ff5555;
+        }
+
+        .login-status.connecting {
+            background: rgba(255, 200, 0, 0.1);
+            border: 1px solid #ffc800;
+            color: #ffc800;
+        }
+
+        .credentials-info {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(0, 255, 136, 0.05);
+            border: 1px solid rgba(0, 255, 136, 0.2);
+            border-radius: 5px;
+            font-size: 12px;
+            color: #aaa;
+        }
+
+        .credentials-info strong {
+            color: #00ff88;
+        }
+
+        /* === DASHBOARD === */
+        .dashboard {
+            width: 100%;
+            max-width: 1200px;
+            padding: 20px;
         }
 
         .header {
-            background-color: #2C2C2C;
-            padding: 20px;
-            text-align: center;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #333;
         }
 
         .header h1 {
-            font-size: 24px;
-            font-weight: bold;
-            color: white;
+            font-size: 32px;
+            color: #00ff88;
         }
 
-        .content {
-            display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
-            flex: 1;
-            background-color: #1a1a1a;
-            gap: 10px;
-            padding: 20px;
+        .user-info {
+            text-align: right;
         }
 
-        .left-grid, .right-grid {
+        .user-info .username {
+            font-size: 18px;
+            font-weight: 600;
+            color: #fff;
+        }
+
+        .user-info .role {
+            font-size: 14px;
+            color: #00ff88;
+            margin-top: 5px;
+        }
+
+        .logout-btn {
+            margin-top: 10px;
+            padding: 8px 20px;
+            background: transparent;
+            border: 1px solid #666;
+            color: #fff;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+
+        .logout-btn:hover {
+            border-color: #00ff88;
+            color: #00ff88;
+        }
+
+        /* === TELEMETRY === */
+        .telemetry-section {
+            margin-bottom: 30px;
+        }
+
+        .telemetry-grid {
             display: grid;
-            grid-template-rows: 1fr 1fr;
-            gap: 10px;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        @media (max-width: 1024px) {
+            .telemetry-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 600px) {
+            .telemetry-grid {
+                grid-template-columns: 1fr;
+            }
         }
 
         .telemetry-card {
-            background-color: #2C2C2C;
+            background: #1a1a1a;
+            border: 1px solid #333;
             border-radius: 10px;
-            padding: 15px;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
+            padding: 25px;
             text-align: center;
+            transition: all 0.3s;
         }
 
-        .telemetry-title {
-            font-size: 16px;
-            font-weight: bold;
-            color: white;
-            margin-bottom: 5px;
+        .telemetry-card:hover {
+            border-color: #00ff88;
+            transform: translateY(-5px);
         }
 
-        .telemetry-value {
-            font-size: 36px;
-            font-weight: bold;
-            color: white;
-            margin: 0;
-        }
-
-        .telemetry-unit {
+        .telemetry-card .label {
             font-size: 14px;
-            color: white;
-            margin-top: 0;
+            color: #888;
+            margin-bottom: 15px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
         }
 
-        .direction-value {
-            font-size: 28px;
-            font-weight: bold;
-            color: white;
-            margin: 0;
+        .telemetry-card .value {
+            font-size: 42px;
+            font-weight: 700;
+            color: #00ff88;
+            line-height: 1;
         }
 
-        .direction-icon {
-            font-size: 20px;
-            color: white;
-            margin-top: 0;
+        .telemetry-card .unit {
+            font-size: 18px;
+            color: #666;
+            margin-left: 5px;
         }
 
-        .car-container {
+        .car-display {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 10px;
+            padding: 30px;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .car-display img {
+            max-width: 300px;
+            width: 100%;
+            filter: drop-shadow(0 0 20px rgba(0, 255, 136, 0.3));
+        }
+
+        /* === ADMIN SECTION === */
+        .admin-section {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 10px;
+            padding: 30px;
+        }
+
+        .admin-section h2 {
+            color: #00ff88;
+            margin-bottom: 25px;
+            font-size: 24px;
+            text-align: center;
+        }
+
+        .command-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+
+        @media (max-width: 600px) {
+            .command-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .command-btn {
+            padding: 15px 25px;
+            background: transparent;
+            border: 2px solid #00ff88;
+            color: #00ff88;
+            border-radius: 5px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .command-btn:hover {
+            background: #00ff88;
+            color: #000;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(0, 255, 136, 0.3);
+        }
+
+        .users-btn {
+            width: 100%;
+            padding: 15px;
+            background: transparent;
+            border: 2px solid #00aaff;
+            color: #00aaff;
+            border-radius: 5px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .users-btn:hover {
+            background: #00aaff;
+            color: #000;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(0, 170, 255, 0.3);
+        }
+
+        .status-message {
+            margin-top: 20px;
+            padding: 12px;
+            border-radius: 5px;
+            text-align: center;
+            font-weight: 600;
+        }
+
+        .status-message.success {
+            background: rgba(0, 255, 136, 0.1);
+            border: 1px solid #00ff88;
+            color: #00ff88;
+        }
+
+        .status-message.error {
+            background: rgba(255, 0, 0, 0.1);
+            border: 1px solid #ff0000;
+            color: #ff5555;
+        }
+
+        /* === MODAL === */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
             display: flex;
             justify-content: center;
             align-items: center;
-            background-color: transparent;
-            border-radius: 15px;
-            padding: 20px;
+            z-index: 1000;
         }
 
-        .car-image {
-            max-width: 100%;
-            max-height: 100%;
-            width: 400px;
-            height: 500px;
-            object-fit: contain;
+        .modal-content {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 10px;
+            padding: 30px;
+            max-width: 700px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
         }
 
-        .car-fallback {
-            font-size: 20px;
-            color: white;
-            text-align: center;
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #333;
+        }
+
+        .modal-header h2 {
+            color: #00ff88;
+            font-size: 24px;
+        }
+
+        .modal-close {
+            background: transparent;
+            border: none;
+            color: #666;
+            font-size: 32px;
+            cursor: pointer;
+            transition: color 0.3s;
+        }
+
+        .modal-close:hover {
+            color: #ff5555;
+        }
+
+        .users-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .users-table th {
+            background: #0a0a0a;
+            padding: 15px;
+            text-align: left;
+            color: #00ff88;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-size: 12px;
+        }
+
+        .users-table td {
+            padding: 15px;
+            border-top: 1px solid #333;
+            color: #aaa;
+        }
+
+        .users-table tbody tr:hover {
+            background: rgba(0, 255, 136, 0.05);
         }
     </style>
 </head>
 <body>
-    <div class="main-container">
-        <!-- HEADER -->
-        <div class="header">
-            <h1>NetDrive</h1>
-        </div>
-
-        <!-- CONTENIDO PRINCIPAL -->
-        <div class="content">
-            <!-- GRID IZQUIERDO (Velocidad y Batería) -->
-            <div class="left-grid">
-                <!-- VELOCIDAD -->
-                <div class="telemetry-card">
-                    <div class="telemetry-title">VELOCIDAD</div>
-                    <div class="telemetry-value">65</div>
-                    <div class="telemetry-unit">km/h</div>
-                </div>
-
-                <!-- BATERÍA -->
-                <div class="telemetry-card">
-                    <div class="telemetry-title">BATERÍA</div>
-                    <div class="telemetry-value">82</div>
-                    <div class="telemetry-unit">%</div>
-                </div>
+    <!-- LOGIN SCREEN -->
+    <div id="loginScreen" class="login-container">
+        <h1>NetDrive</h1>
+        <form onsubmit="return false;">
+            <div class="form-group">
+                <label for="username">Usuario</label>
+                <input type="text" id="username" placeholder="Ingresa tu usuario" autocomplete="username">
             </div>
-
-            <!-- FRAME CENTRAL PARA IMAGEN DEL CARRO -->
-            <div class="car-container">
-                <img src="images/auto.png" alt="Auto" class="car-image" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
-                <div class="car-fallback" style="display: none;">IMAGEN DEL CARRO</div>
+            <div class="form-group">
+                <label for="password">Contraseña</label>
+                <input type="password" id="password" placeholder="Ingresa tu contraseña" autocomplete="current-password">
             </div>
-
-            <!-- GRID DERECHO (Temperatura y Dirección) -->
-            <div class="right-grid">
-                <!-- TEMPERATURA -->
-                <div class="telemetry-card">
-                    <div class="telemetry-title">TEMPERATURA</div>
-                    <div class="telemetry-value">28</div>
-                    <div class="telemetry-unit">°C</div>
-                </div>
-
-                <!-- DIRECCIÓN -->
-                <div class="telemetry-card">
-                    <div class="telemetry-title">DIRECCIÓN</div>
-                    <div class="direction-value">NORTE</div>
-                    <div class="direction-icon">N</div>
-                </div>
-            </div>
+            <button type="button" id="loginBtn" class="login-btn">Iniciar Sesión</button>
+            <div id="loginStatus" class="login-status hidden"></div>
+        </form>
+        <div class="credentials-info">
+            <strong>Usuarios de prueba:</strong><br>
+            • admin / admin123 (Administrador)<br>
+            • observer / observer123 (Observador)
         </div>
     </div>
 
-<script>
-document.addEventListener("DOMContentLoaded", () => {
-    // Conectar con tu backend (cambia IP y puerto según tu servidor)
-    const socket = new WebSocket("ws://127.0.0.1:2000");
+    <!-- DASHBOARD -->
+    <div id="dashboard" class="dashboard hidden">
+        <div class="header">
+            <h1>NetDrive - Telemetry System</h1>
+            <div class="user-info">
+                <div class="username" id="dashboardUsername">Usuario</div>
+                <div class="role" id="dashboardRole">Rol</div>
+                <button class="logout-btn" onclick="logout()">Cerrar Sesión</button>
+            </div>
+        </div>
 
-    socket.onopen = () => {
-        console.log("Conectado al servidor WebSocket");
-    };
+        <!-- Telemetry -->
+        <div class="telemetry-section">
+            <div class="telemetry-grid">
+                <div class="telemetry-card">
+                    <div class="label">Velocidad</div>
+                    <div class="value">
+                        <span id="speed">0</span>
+                        <span class="unit">km/h</span>
+                    </div>
+                </div>
+                <div class="telemetry-card">
+                    <div class="label">Dirección</div>
+                    <div class="value">
+                        <span id="direction">N</span>
+                    </div>
+                </div>
+                <div class="telemetry-card">
+                    <div class="label">Batería</div>
+                    <div class="value">
+                        <span id="battery">100</span>
+                        <span class="unit">%</span>
+                    </div>
+                </div>
+                <div class="telemetry-card">
+                    <div class="label">Temperatura</div>
+                    <div class="value">
+                        <span id="temperature">25</span>
+                        <span class="unit">°C</span>
+                    </div>
+                </div>
+            </div>
 
-    socket.onerror = (err) => {
-        console.error("Error en la conexión WebSocket:", err);
-    };
+            <div class="car-display">
+                <img src="images/auto.png" alt="Vehicle" id="carImage">
+            </div>
+        </div>
 
-    socket.onclose = () => {
-        console.log("Conexión cerrada");
-    };
+        <!-- Admin Controls -->
+        <div id="adminControls" class="admin-section hidden">
+            <h2>Panel de Control - Administrador</h2>
+            <div class="command-grid">
+                <button class="command-btn" onclick="sendCommand('SPEED UP')">Acelerar</button>
+                <button class="command-btn" onclick="sendCommand('SLOW DOWN')">Frenar</button>
+                <button class="command-btn" onclick="sendCommand('TURN LEFT')">Girar Izquierda</button>
+                <button class="command-btn" onclick="sendCommand('TURN RIGHT')">Girar Derecha</button>
+            </div>
+            <button class="users-btn" onclick="showUsersModal()">Ver Usuarios Conectados</button>
+            <div id="commandStatus" class="status-message hidden"></div>
+        </div>
+    </div>
 
-    //Escuchar mensajes entrantes del backend
-    socket.onmessage = (event) => {
-        console.log("Telemetría recibida:", event.data);
-        parseTelemetry(event.data);
-    };
+    <!-- USERS MODAL -->
+    <div id="usersModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Usuarios Conectados</h2>
+                <button class="modal-close" onclick="closeUsersModal()">&times;</button>
+            </div>
+            <table class="users-table">
+                <thead>
+                    <tr>
+                        <th>Usuario</th>
+                        <th>Rol</th>
+                        <th>Dirección IP</th>
+                    </tr>
+                </thead>
+                <tbody id="usersTableBody">
+                    <!-- Populated by JS -->
+                </tbody>
+            </table>
+        </div>
+    </div>
 
-    // Parsear el mensaje recibido
-    function parseTelemetry(raw) {
-        // Eliminar el prefijo y sufijo si vienen
-        raw = raw.replace("PTT", "").replace("END", "").trim();
+    <script>
+        let socket = null;
+        let currentUser = null;
+        let currentRole = null;
+        let awaitingAuth = false;
+        let awaitingUserList = false;
 
-        // Dividir por ";" y procesar cada par clave=valor
-        const parts = raw.split(";").filter(p => p.includes("="));
-        const data = {};
-        parts.forEach(p => {
-            const [key, value] = p.split("=");
-            data[key.trim()] = value.trim();
+        // === PROTOCOL FUNCTIONS ===
+        function createMessage(action, data) {
+            const actionPadded = action.padEnd(12, ' ');
+            const dataPadded = data.padEnd(150, ' ');
+            return `PTT${actionPadded}${dataPadded}END`;
+        }
+
+        function parseResponse(raw) {
+            try {
+                const pttIndex = raw.indexOf('PTT');
+                const endIndex = raw.indexOf('END');
+                
+                if (pttIndex === -1 || endIndex === -1) {
+                    return null;
+                }
+
+                const action = raw.substring(pttIndex + 3, pttIndex + 15).trim();
+                const data = raw.substring(pttIndex + 15, endIndex).trim();
+                
+                return { action, data };
+            } catch (e) {
+                console.error('Parse error:', e);
+                return null;
+            }
+        }
+
+        // === LOGIN ===
+        document.getElementById('loginBtn').addEventListener('click', doLogin);
+        document.getElementById('password').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') doLogin();
         });
 
-        console.log("Datos parseados:", data);
-        updateTelemetryUI(data);
-    }
+        function showLoginStatus(message, type) {
+            const statusDiv = document.getElementById('loginStatus');
+            statusDiv.textContent = message;
+            statusDiv.className = `login-status ${type}`;
+            statusDiv.classList.remove('hidden');
+        }
 
-    //Actualizar valores en el HTML en tiempo real
-    function updateTelemetryUI(data) {
-        // Si el valor existe, actualizarlo
-        if (data.speed !== undefined) {
-            document.querySelector(".left-grid .telemetry-card:nth-child(1) .telemetry-value").textContent = data.speed;
-        }
-        if (data.battery !== undefined) {
-            document.querySelector(".left-grid .telemetry-card:nth-child(2) .telemetry-value").textContent = data.battery;
-        }
-        if (data.temp !== undefined) {
-            document.querySelector(".right-grid .telemetry-card:nth-child(1) .telemetry-value").textContent = data.temp;
-        }
-        if (data.dir !== undefined) {
-            document.querySelector(".right-grid .telemetry-card:nth-child(2) .direction-value").textContent = data.dir;
-            document.querySelector(".right-grid .telemetry-card:nth-child(2) .direction-icon").textContent = data.dir[0] || "?";
-        }
-    }
+        function doLogin() {
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value.trim();
+            const loginBtn = document.getElementById('loginBtn');
 
-    //Enviar comandos al backend (si lo necesitas)
-    window.sendCommand = function(cmd) {
-        if (socket.readyState === WebSocket.OPEN) {
-            socket.send(cmd);
-            console.log("Comando enviado:", cmd);
-        } else {
-            console.warn("WebSocket no está abierto");
+            if (!username || !password) {
+                showLoginStatus('Ingresa usuario y contraseña', 'error');
+                return;
+            }
+
+            loginBtn.disabled = true;
+            showLoginStatus('Conectando...', 'connecting');
+
+            socket = new WebSocket('ws://127.0.0.1:8080');
+
+            socket.onopen = () => {
+                showLoginStatus('Autenticando...', 'connecting');
+                
+                const loginData = `${username};${password}`;
+                const message = createMessage('LOGIN', loginData);
+                
+                awaitingAuth = true;
+                currentUser = username;
+                socket.send(message);
+            };
+
+            socket.onmessage = (event) => {
+                const parsed = parseResponse(event.data);
+                
+                if (!parsed) {
+                    return;
+                }
+
+                console.log('[MESSAGE] Mensaje recibido:', parsed.action, '|', parsed.data.substring(0, 50));
+
+                // Handle authentication response
+                if (awaitingAuth && parsed.action === 'OK') {
+                    awaitingAuth = false;
+                    
+                    // Extract role
+                    const roleMatch = parsed.data.match(/role=(\w+)/);
+                    currentRole = roleMatch ? roleMatch[1] : 'OBSERVER';
+                    
+                    showDashboard();
+                    return;
+                }
+
+                // Handle authentication error
+                if (awaitingAuth && parsed.action === 'ERROR') {
+                    awaitingAuth = false;
+                    document.getElementById('loginBtn').disabled = false;
+                    showLoginStatus('Credenciales incorrectas', 'error');
+                    socket.close();
+                    return;
+                }
+
+                // Handle telemetry data
+                if (parsed.action === 'DATA') {
+                    updateTelemetry(parsed.data);
+                    return;
+                }
+
+                // Handle command responses
+                if (parsed.action === 'OK' && parsed.data.includes('COMMAND_OK')) {
+                    showCommandStatus('Comando ejecutado correctamente', 'success');
+                    return;
+                }
+
+                if (parsed.action === 'DENIED') {
+                    showCommandStatus('Permiso denegado', 'error');
+                    return;
+                }
+
+                // Handle user list - mejorar detección
+                if (awaitingUserList && parsed.action === 'OK') {
+                    console.log('[LIST] Lista de usuarios recibida:', parsed.data);
+                    awaitingUserList = false;
+                    displayUsers(parsed.data);
+                    return;
+                }
+            };
+
+            socket.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                showLoginStatus('Error de conexión', 'error');
+                document.getElementById('loginBtn').disabled = false;
+                awaitingAuth = false;
+            };
+
+            socket.onclose = () => {
+                if (awaitingAuth) {
+                    showLoginStatus('Conexión cerrada', 'error');
+                    document.getElementById('loginBtn').disabled = false;
+                    awaitingAuth = false;
+                }
+            };
         }
-    };
-});
-</script>
+
+        // === DASHBOARD ===
+        function showDashboard() {
+            document.getElementById('loginScreen').classList.add('hidden');
+            document.getElementById('dashboard').classList.remove('hidden');
+            
+            document.getElementById('dashboardUsername').textContent = currentUser;
+            document.getElementById('dashboardRole').textContent = currentRole;
+            
+            // Mostrar panel de admin SOLO si es ADMIN
+            const adminControls = document.getElementById('adminControls');
+            if (currentRole === 'ADMIN') {
+                adminControls.classList.remove('hidden');
+            } else {
+                adminControls.classList.add('hidden');
+            }
+        }
+
+        function updateTelemetry(data) {
+            const speedMatch = data.match(/speed=([\d.]+)/);
+            const dirMatch = data.match(/dir=([\d.]+)/);
+            const batteryMatch = data.match(/battery=([\d.]+)/);
+            const tempMatch = data.match(/temp=([\d.]+)/);
+
+            if (speedMatch) document.getElementById('speed').textContent = speedMatch[1];
+            if (dirMatch) {
+                const degrees = parseFloat(dirMatch[1]);
+                const cardinal = degreesToCardinal(degrees);
+                document.getElementById('direction').textContent = `${cardinal} (${degrees}°)`;
+            }
+            if (batteryMatch) document.getElementById('battery').textContent = batteryMatch[1];
+            if (tempMatch) document.getElementById('temperature').textContent = tempMatch[1];
+        }
+
+        function degreesToCardinal(degrees) {
+            const directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+            const index = Math.round(degrees / 45) % 8;
+            return directions[index];
+        }
+
+        function logout() {
+            if (socket) {
+                socket.close();
+            }
+            currentUser = null;
+            currentRole = null;
+            document.getElementById('dashboard').classList.add('hidden');
+            document.getElementById('loginScreen').classList.remove('hidden');
+            document.getElementById('username').value = '';
+            document.getElementById('password').value = '';
+            document.getElementById('loginBtn').disabled = false;
+            document.getElementById('loginStatus').classList.add('hidden');
+        }
+
+        // === ADMIN FUNCTIONS ===
+        function sendCommand(command) {
+            if (!socket || socket.readyState !== WebSocket.OPEN) {
+                showCommandStatus('No conectado al servidor', 'error');
+                return;
+            }
+
+            const message = createMessage('COMMAND', command);
+            socket.send(message);
+            showCommandStatus('Enviando comando...', 'success');
+        }
+
+        function showCommandStatus(message, type) {
+            const statusDiv = document.getElementById('commandStatus');
+            statusDiv.textContent = message;
+            statusDiv.className = `status-message ${type}`;
+            statusDiv.classList.remove('hidden');
+            
+            setTimeout(() => {
+                statusDiv.classList.add('hidden');
+            }, 3000);
+        }
+
+        function showUsersModal() {
+            if (!socket || socket.readyState !== WebSocket.OPEN) {
+                showCommandStatus('No conectado al servidor', 'error');
+                return;
+            }
+
+            console.log('[LIST] Solicitando lista de usuarios...');
+            const message = createMessage('LIST', '');
+            awaitingUserList = true;
+            socket.send(message);
+            document.getElementById('usersModal').classList.remove('hidden');
+        }
+
+        function closeUsersModal() {
+            document.getElementById('usersModal').classList.add('hidden');
+        }
+
+        function displayUsers(data) {
+            console.log('[LIST] Parseando usuarios:', data);
+            const tbody = document.getElementById('usersTableBody');
+            tbody.innerHTML = '';
+
+            // Parse user data: "user1:ADMIN:192.168.1.1,user2:OBSERVER:192.168.1.2"
+            const users = data.split(',').filter(u => u.trim());
+            
+            console.log('[LIST] Usuarios encontrados:', users.length);
+            
+            users.forEach(userStr => {
+                const parts = userStr.trim().split(':');
+                console.log('  - Partes:', parts);
+                
+                if (parts.length >= 3 && parts[1] !== 'NONE') {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${parts[0]}</td>
+                        <td>${parts[1]}</td>
+                        <td>${parts[2]}</td>
+                    `;
+                    tbody.appendChild(tr);
+                }
+            });
+
+            if (tbody.children.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color: #666;">No hay usuarios conectados</td></tr>';
+            }
+        }
+    </script>
 </body>
 </html>
-

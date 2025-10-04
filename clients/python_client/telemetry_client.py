@@ -1,5 +1,5 @@
 import customtkinter as ctk
-from PIL import Image, ImageTk
+from PIL import Image
 import car as car_module
 
 
@@ -125,9 +125,12 @@ def load_car_image():
     try:
         car_image = Image.open("images/auto.png")
         
-        # Redimensionar imagen para que se ajuste al contenedor
-        car_image = car_image.resize((400, 500), Image.Resampling.LANCZOS)
-        car_photo = ImageTk.PhotoImage(car_image)
+        # Usar CTkImage en lugar de ImageTk.PhotoImage
+        car_photo = ctk.CTkImage(
+            light_image=car_image,
+            dark_image=car_image,
+            size=(400, 500)
+        )
         
         car_image_label = ctk.CTkLabel(
             car_frame,
