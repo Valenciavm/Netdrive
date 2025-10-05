@@ -6,10 +6,14 @@
 #include <pthread.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdarg.h>
 
 #include "car.h"     // Lógica del carro
 #include "auth.h"    // Sistema de autenticación
 #include "protocol.h" // Protocolo PTT
+
+#include "logger.h"
+#define printf(...) log_printf(__VA_ARGS__)
 
 // ====== Variables globales ======
 #define MAX_CLIENTS 10
@@ -57,6 +61,8 @@ void *handle_client(void *arg) {
     bool connection_active = true;
     Session *session = NULL;
 
+    int err_count = 0;
+
     // Obtener IP y puerto del cliente
     struct sockaddr_in client_addr;
     socklen_t addr_len = sizeof(client_addr);
@@ -92,7 +98,25 @@ void *handle_client(void *arg) {
             continue;
         }
 
-        printf("[HILO] fd=%d | Action=%s | Data=%s\n", client_fd, msg.action, msg.data);
+        printf("[HILO] fd=%d Action=%s Data=%s\n", client_fd, msg.action, msg.data);
+
+        // Comando STATUS
+        if (strncmp(msg.action, "STATUS", 6) == 0) {
+            printf("[STATUS] (fd=%d) %s\n", client_fd, msg.data);
+
+            if(strncmp(msg.data, "OK", 2) == 0){
+                err_count = 0;
+                continue;
+            }
+            
+            if(strncmp(msg.data, "ERROR") == 0){
+                err_count++;
+                if(err_count > 2){
+                    printf("[STATUS] Conexión finalizada (fd=%d) límite de errores alcanzado", client_fd);
+                    remove_session(client_fd);
+                }
+            }
+        }
 
         // ====== MANEJO DE AUTENTICACIÓN ======
         if (strcmp(msg.action, ACTION_LOGIN) == 0) {
@@ -205,7 +229,8 @@ void *handle_client(void *arg) {
         if (strncmp(msg.data, "EXIT", 4) == 0) {
             printf("[HILO] Cliente %s pidió salir.\n", session->username);
             break;
-        }
+        }       
+
     }
 
     // Remover sesión y cliente
@@ -307,6 +332,8 @@ int main() {
     pthread_create(&broadcast_thread, NULL, send_telemetry, NULL);
     pthread_detach(broadcast_thread); 
 
+    //pthread_t logwriter_thread;
+    //pthread_create()
 
     while (1) {
 

@@ -3,6 +3,7 @@ import threading
 import telemetry_client as tc
 import car as car_module
 import re
+import time
 
 # ====== Configuración del cliente ======
 SERVER_IP = "127.0.0.1"
@@ -11,6 +12,7 @@ SERVER_PORT = 2000
 client = None
 authenticated = False
 running = True
+response = "" #respuestas de cliente
 
 # ====== Funciones del protocolo PTT ======
 def create_message(action, data):
@@ -131,6 +133,7 @@ def connect_and_auth(username, password):
 def receive_thread():
     """Recibe y procesa datos de telemetría del servidor"""
     global running
+    global response
     
     while running and authenticated:
         try:
@@ -151,14 +154,37 @@ def receive_thread():
                     # Actualizar el estado del carro
                     car_module.car.updateState(speed, direction, battery, temp)
                     
+                    response = "OK"
+                    #print(response)
+                    
                     # Actualizar la interfaz gráfica
                     tc.root.after(0, lambda s=speed, t=temp, d=direction, b=battery: 
-                                  tc.update_telemetry(s, t, d, b))
-                    
+                                  tc.update_telemetry(s, t, d, b))  
         except Exception as e:
             if running:
-                print(f"[ERROR] Error recibiendo datos: {e}")
+                print(e)
+                response = "ERROR"
+                print(response)
             break
+        
+def response_thread():
+    #Agregar vairables de respuesta
+    #El hilo receptro modifica esta variable
+    #Cada x segundos el hilo de respuesta verifica si hay una respuesta pendiente por enviar
+    #Envía la respuesta, la limpia y se duerme
+    global response
+    try:
+        while running:
+            if not response:
+                print("[CLIENTE] no hay respuestas a enviar")
+                time.sleep(2)    
+            else:
+                print(f"[STATUS]", response)
+                pttresponse = "PTT" + "STATUS" + "      " + response + "END"
+                client.sendall(pttresponse.encode('utf-8'))
+                response = ""
+    finally:
+        client.close() 
 
 # ====== Inicio del cliente ======
 def start_client():
@@ -175,7 +201,10 @@ def start_client():
     if connect_and_auth(username, password):
         # Iniciar hilo de recepción
         recv_thread = threading.Thread(target=receive_thread, daemon=True)
+        resp_thread = threading.Thread(target=response_thread, daemon=True)
+        
         recv_thread.start()
+        resp_thread.start()
         
         print("[INIT] Cliente iniciado correctamente")
         print("[INIT] Esperando datos de telemetria...")

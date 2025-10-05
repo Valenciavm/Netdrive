@@ -231,7 +231,7 @@ npx http-server -p 3000
 ## Estructura del Proyecto
 
 ```
-Netride/
+Netdrive/
 ├── server/                    # Servidor en C
 │   ├── main.c                 # Lógica principal y manejo de clientes
 │   ├── car.c                  # Lógica del vehículo y telemetría

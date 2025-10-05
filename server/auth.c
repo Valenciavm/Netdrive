@@ -4,6 +4,10 @@
 #include <stdlib.h>
 #include <pthread.h>
 
+#include "logger.h"
+
+#define printf(...) log_printf(__VA_ARGS__)
+
 // Base de datos de usuarios (hardcodeada para simplificar)
 User users_db[] = {
     {"admin", "admin123", ROLE_ADMIN},

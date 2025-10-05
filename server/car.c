@@ -3,6 +3,10 @@
 #include <stdio.h>
 #include <stddef.h>
 
+#include "logger.h"
+
+#define printf(...) log_printf(__VA_ARGS__)
+
 void initCar(struct CarState *car) {
     car->speed = 0;
     car->battery = 100;

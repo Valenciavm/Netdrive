@@ -2,6 +2,10 @@
 #include <string.h>
 #include <stdio.h>
 
+#include "logger.h"
+#define printf(...) log_printf(__VA_ARGS__)
+
+
 // Crear mensaje del protocolo
 void create_message(ProtocolMessage *msg, const char *action, const char *data) {
     strncpy(msg->header, "PTT", 3);
