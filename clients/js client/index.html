@@ -427,7 +427,7 @@
 <body>
     <!-- LOGIN SCREEN -->
     <div id="loginScreen" class="login-container">
-        <h1>NetDrive</h1>
+            <h1>NetDrive</h1>
         <form onsubmit="return false;">
             <div class="form-group">
                 <label for="username">Usuario</label>
@@ -445,7 +445,7 @@
             • admin / admin123 (Administrador)<br>
             • observer / observer123 (Observador)
         </div>
-    </div>
+        </div>
 
     <!-- DASHBOARD -->
     <div id="dashboard" class="dashboard hidden">
@@ -456,7 +456,7 @@
                 <div class="role" id="dashboardRole">Rol</div>
                 <button class="logout-btn" onclick="logout()">Cerrar Sesión</button>
             </div>
-        </div>
+                </div>
 
         <!-- Telemetry -->
         <div class="telemetry-section">
@@ -493,7 +493,7 @@
             <div class="car-display">
                 <img src="images/auto.png" alt="Vehicle" id="carImage">
             </div>
-        </div>
+            </div>
 
         <!-- Admin Controls -->
         <div id="adminControls" class="admin-section hidden">
@@ -507,7 +507,7 @@
             <button class="users-btn" onclick="showUsersModal()">Ver Usuarios Conectados</button>
             <div id="commandStatus" class="status-message hidden"></div>
         </div>
-    </div>
+                </div>
 
     <!-- USERS MODAL -->
     <div id="usersModal" class="modal hidden">
@@ -515,7 +515,7 @@
             <div class="modal-header">
                 <h2>Usuarios Conectados</h2>
                 <button class="modal-close" onclick="closeUsersModal()">&times;</button>
-            </div>
+                </div>
             <table class="users-table">
                 <thead>
                     <tr>
@@ -531,12 +531,16 @@
         </div>
     </div>
 
-    <script>
+<script>
         let socket = null;
         let currentUser = null;
         let currentRole = null;
         let awaitingAuth = false;
         let awaitingUserList = false;
+        
+        // ====== SISTEMA DE VERIFICACIÓN DE RESPUESTAS ======
+        let clientResponse = "";  // Variable global: "", "OK", "ERROR"
+        let responseInterval = null;  // Intervalo para enviar STATUS
 
         // === PROTOCOL FUNCTIONS ===
         function createMessage(action, data) {
@@ -551,6 +555,8 @@
                 const endIndex = raw.indexOf('END');
                 
                 if (pttIndex === -1 || endIndex === -1) {
+                    console.warn('[PARSE] Mensaje sin formato PTT válido');
+                    clientResponse = "ERROR";  // Formato inválido
                     return null;
                 }
 
@@ -559,8 +565,50 @@
                 
                 return { action, data };
             } catch (e) {
-                console.error('Parse error:', e);
+                console.error('[PARSE] Error parseando:', e);
+                clientResponse = "ERROR";  // Error de parseo
                 return null;
+            }
+        }
+
+        // ====== HILO DE RESPUESTAS (Similar a Python) ======
+        function sendStatusToServer() {
+            // Si no hay respuesta pendiente, no hacer nada
+            if (!clientResponse || !socket || socket.readyState !== WebSocket.OPEN) {
+                return;
+            }
+
+            console.log(`[STATUS] Enviando: ${clientResponse}`);
+            const statusMessage = createMessage('STATUS', clientResponse);
+            socket.send(statusMessage);
+            
+            // Limpiar respuesta después de enviar
+            clientResponse = "";
+        }
+
+        function startResponseThread() {
+            // Detener intervalo previo si existe
+            if (responseInterval) {
+                clearInterval(responseInterval);
+            }
+            
+            // Verificar cada 2 segundos (igual que Python)
+            responseInterval = setInterval(() => {
+                if (!clientResponse) {
+                    console.log('[CLIENTE] No hay respuestas pendientes');
+                } else {
+                    sendStatusToServer();
+                }
+            }, 2000);
+            
+            console.log('[RESPONSE THREAD] Iniciado - verificando cada 2s');
+        }
+
+        function stopResponseThread() {
+            if (responseInterval) {
+                clearInterval(responseInterval);
+                responseInterval = null;
+                console.log('[RESPONSE THREAD] Detenido');
             }
         }
 
@@ -592,7 +640,7 @@
 
             socket = new WebSocket('ws://127.0.0.1:8080');
 
-            socket.onopen = () => {
+    socket.onopen = () => {
                 showLoginStatus('Autenticando...', 'connecting');
                 
                 const loginData = `${username};${password}`;
@@ -621,6 +669,7 @@
                     currentRole = roleMatch ? roleMatch[1] : 'OBSERVER';
                     
                     showDashboard();
+                    startResponseThread();  // ✅ INICIAR HILO DE RESPUESTAS
                     return;
                 }
 
@@ -635,38 +684,50 @@
 
                 // Handle telemetry data
                 if (parsed.action === 'DATA') {
-                    updateTelemetry(parsed.data);
+                    try {
+                        updateTelemetry(parsed.data);
+                        clientResponse = "OK";  // ✅ Telemetría procesada correctamente
+                    } catch (error) {
+                        console.error('[TELEMETRY] Error actualizando:', error);
+                        clientResponse = "ERROR";  // ✅ Error procesando telemetría
+                    }
                     return;
                 }
 
                 // Handle command responses
                 if (parsed.action === 'OK' && parsed.data.includes('COMMAND_OK')) {
                     showCommandStatus('Comando ejecutado correctamente', 'success');
+                    clientResponse = "OK";  // ✅ Comando procesado
                     return;
                 }
 
                 if (parsed.action === 'DENIED') {
                     showCommandStatus('Permiso denegado', 'error');
+                    clientResponse = "OK";  // ✅ Mensaje recibido (aunque denegado)
                     return;
                 }
 
-                // Handle user list - mejorar detección
+                // Handle user list
                 if (awaitingUserList && parsed.action === 'OK') {
                     console.log('[LIST] Lista de usuarios recibida:', parsed.data);
                     awaitingUserList = false;
                     displayUsers(parsed.data);
+                    clientResponse = "OK";  // ✅ Lista procesada
                     return;
                 }
             };
 
             socket.onerror = (error) => {
-                console.error('WebSocket error:', error);
+                console.error('[WEBSOCKET] Error:', error);
                 showLoginStatus('Error de conexión', 'error');
                 document.getElementById('loginBtn').disabled = false;
                 awaitingAuth = false;
+                clientResponse = "ERROR";  // ✅ Error de conexión
             };
 
             socket.onclose = () => {
+                stopResponseThread();  // ✅ Detener hilo al cerrar conexión
+                
                 if (awaitingAuth) {
                     showLoginStatus('Conexión cerrada', 'error');
                     document.getElementById('loginBtn').disabled = false;
@@ -715,11 +776,14 @@
         }
 
         function logout() {
+            stopResponseThread();  // ✅ Detener hilo al logout
+            
             if (socket) {
                 socket.close();
             }
             currentUser = null;
             currentRole = null;
+            clientResponse = "";  // ✅ Limpiar respuesta pendiente
             document.getElementById('dashboard').classList.add('hidden');
             document.getElementById('loginScreen').classList.remove('hidden');
             document.getElementById('username').value = '';
@@ -797,6 +861,6 @@
                 tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color: #666;">No hay usuarios conectados</td></tr>';
             }
         }
-    </script>
+</script>
 </body>
 </html>

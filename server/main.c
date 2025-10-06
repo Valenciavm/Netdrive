@@ -109,7 +109,7 @@ void *handle_client(void *arg) {
                 continue;
             }
             
-            if(strncmp(msg.data, "ERROR") == 0){
+            if(strncmp(msg.data, "ERROR", 5) == 0){
                 err_count++;
                 if(err_count > 2){
                     printf("[STATUS] Conexión finalizada (fd=%d) límite de errores alcanzado", client_fd);
@@ -284,7 +284,29 @@ void *send_telemetry(void *arg) {
 }
 
 // ====== MAIN ======
-int main() {
+int main(int argc, char *argv[]) {
+    int port = 2000;  // Puerto por defecto
+    char logfile[256] = "server.log";  // Archivo de logs por defecto
+    
+    // Procesar argumentos de línea de comandos
+    if (argc >= 2) {
+        port = atoi(argv[1]);
+        if (port <= 0 || port > 65535) {
+            fprintf(stderr, "Error: Puerto inválido. Debe estar entre 1 y 65535\n");
+            fprintf(stderr, "Uso: %s <puerto> <archivo_logs>\n", argv[0]);
+            fprintf(stderr, "Ejemplo: %s 2000 server.log\n", argv[0]);
+            exit(EXIT_FAILURE);
+        }
+    }
+    
+    if (argc >= 3) {
+        strncpy(logfile, argv[2], sizeof(logfile) - 1);
+        logfile[sizeof(logfile) - 1] = '\0';
+    }
+    
+    // Inicializar sistema de logging
+    init_logger(logfile);
+    
     // Inicializar array de clientes
     for (int i = 0; i < MAX_CLIENTS; i++) {
         clients_fds[i] = 0;
@@ -296,6 +318,8 @@ int main() {
     printf("==============================================\n");
     printf("   SERVIDOR NETDRIVE - PTT v2\n");
     printf("==============================================\n");
+    printf("Puerto: %d\n", port);
+    printf("Archivo de logs: %s\n", logfile);
     printf("Usuarios disponibles:\n");
     printf("  - admin / admin123 (ADMIN)\n");
     printf("  - observer / observer123 (OBSERVER)\n");
@@ -311,7 +335,7 @@ int main() {
     if (server_fd < 0) { perror("socket failed"); exit(EXIT_FAILURE); }
 
     server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(2000);
+    server_addr.sin_port = htons(port);
     server_addr.sin_addr.s_addr = INADDR_ANY;
 
     if (bind(server_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
@@ -326,7 +350,7 @@ int main() {
         exit(EXIT_FAILURE);
     }
 
-    printf("[SERVIDOR] Escuchando en el puerto 2000...\n");
+    printf("[SERVIDOR] Escuchando en el puerto %d...\n", port);
 
     pthread_t broadcast_thread; // Se crea un hilo encargado de enviar telemetría a todos los clientes
     pthread_create(&broadcast_thread, NULL, send_telemetry, NULL);

@@ -3,10 +3,21 @@ import threading
 import customtkinter as ctk
 from tkinter import messagebox
 import re
+import sys
 
 # ====== Configuración del cliente ======
 SERVER_IP = "127.0.0.1"
-SERVER_PORT = 2000
+SERVER_PORT = 2000  # Puerto por defecto
+
+# Leer puerto desde argumentos de línea de comandos
+if len(sys.argv) >= 2:
+    try:
+        SERVER_PORT = int(sys.argv[1])
+        print(f"[CONFIG] Usando puerto {SERVER_PORT} desde argumentos")
+    except ValueError:
+        print(f"[ERROR] Puerto inválido: {sys.argv[1]}")
+        print(f"Uso: python {sys.argv[0]} [puerto]")
+        sys.exit(1)
 
 client = None
 authenticated = False
@@ -117,15 +128,24 @@ def send_command(cmd):
     try:
         send_message("COMMAND", cmd)
         
-        response = client.recv(1024)
-        action, data = parse_response(response)
+        # Esperar respuesta, puede recibir telemetría antes de la respuesta
+        # Reintentar hasta 3 veces para encontrar la respuesta del comando
+        for _ in range(3):
+            response = client.recv(1024)
+            action, data = parse_response(response)
+            
+            # Ignorar mensajes DATA (telemetría)
+            if action == "DATA":
+                continue
+            
+            if action == "OK":
+                return True, "Comando ejecutado"
+            elif action == "DENIED":
+                return False, "Permiso denegado"
+            else:
+                return False, f"Respuesta inesperada: {action}"
         
-        if action == "OK":
-            return True, "Comando ejecutado"
-        elif action == "DENIED":
-            return False, "Permiso denegado"
-        else:
-            return False, "Error ejecutando comando"
+        return False, "No se recibió respuesta del comando"
     except Exception as e:
         return False, str(e)
 
@@ -135,39 +155,50 @@ def list_users():
         print("[LIST] Solicitando lista de usuarios...")
         send_message("LIST", "")
         
-        response = client.recv(1024)
-        action, data = parse_response(response)
-        
-        print(f"[LIST] Respuesta LIST - action='{action}', data='{data}'")
-        
-        if action == "OK":
-            # Parsear formato CSV: "user1:ADMIN:192.168.1.1,user2:OBSERVER:192.168.1.2"
-            users = []
+        # Esperar respuesta, puede recibir telemetría antes
+        # Reintentar hasta 3 veces para encontrar la respuesta de LIST
+        for _ in range(3):
+            response = client.recv(1024)
+            action, data = parse_response(response)
             
-            # Dividir por comas
-            user_entries = data.split(',')
+            # Ignorar mensajes DATA (telemetría)
+            if action == "DATA":
+                continue
             
-            for entry in user_entries:
-                entry = entry.strip()
-                if not entry or 'NONE' in entry:
-                    continue
+            print(f"[LIST] Respuesta LIST - action='{action}', data='{data}'")
+            
+            if action == "OK":
+                # Parsear formato CSV: "user1:ADMIN:192.168.1.1,user2:OBSERVER:192.168.1.2"
+                users = []
                 
-                # Dividir por dos puntos
-                parts = entry.split(':')
-                if len(parts) >= 3:
-                    users.append({
-                        'user': parts[0],
-                        'role': parts[1],
-                        'ip': parts[2],
-                        'port': 'N/A'  # El nuevo formato no incluye puerto
-                    })
-                    print(f"  [USER] Usuario: {parts[0]} - {parts[1]} - {parts[2]}")
-            
-            print(f"[LIST] Total usuarios: {len(users)}")
-            return users
-        else:
-            print(f"[LIST] Error obteniendo lista - action='{action}'")
-            return []
+                # Dividir por comas
+                user_entries = data.split(',')
+                
+                for entry in user_entries:
+                    entry = entry.strip()
+                    if not entry or 'NONE' in entry:
+                        continue
+                    
+                    # Dividir por dos puntos
+                    parts = entry.split(':')
+                    if len(parts) >= 3:
+                        users.append({
+                            'user': parts[0],
+                            'role': parts[1],
+                            'ip': parts[2],
+                            'port': 'N/A'  # El nuevo formato no incluye puerto
+                        })
+                        print(f"  [USER] Usuario: {parts[0]} - {parts[1]} - {parts[2]}")
+                
+                print(f"[LIST] Total usuarios: {len(users)}")
+                return users
+            else:
+                # Recibió una respuesta pero no es OK
+                print(f"[LIST] Error obteniendo lista - action='{action}'")
+        
+        # Si llegó aquí, no recibió respuesta válida después de 3 intentos
+        print("[LIST] No se recibió respuesta de LIST")
+        return []
     except Exception as e:
         print(f"[ERROR] Error listando usuarios: {e}")
         import traceback

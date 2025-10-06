@@ -4,10 +4,21 @@ import telemetry_client as tc
 import car as car_module
 import re
 import time
+import sys
 
 # ====== Configuración del cliente ======
 SERVER_IP = "127.0.0.1"
-SERVER_PORT = 2000
+SERVER_PORT = 2000  # Puerto por defecto
+
+# Leer puerto desde argumentos de línea de comandos
+if len(sys.argv) >= 2:
+    try:
+        SERVER_PORT = int(sys.argv[1])
+        print(f"[CONFIG] Usando puerto {SERVER_PORT} desde argumentos")
+    except ValueError:
+        print(f"[ERROR] Puerto inválido: {sys.argv[1]}")
+        print(f"Uso: python {sys.argv[0]} [puerto]")
+        sys.exit(1)
 
 client = None
 authenticated = False

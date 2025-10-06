@@ -3,13 +3,27 @@ const net = require('net');
 
 const WS_PORT = 8080;
 const TCP_HOST = '127.0.0.1';
-const TCP_PORT = 2000;
+let TCP_PORT = 2000;  // Puerto por defecto
+
+// Leer puerto desde argumentos de línea de comandos
+if (process.argv.length >= 3) {
+    const portArg = parseInt(process.argv[2]);
+    if (portArg > 0 && portArg <= 65535) {
+        TCP_PORT = portArg;
+        console.log(`[CONFIG] Usando puerto TCP ${TCP_PORT} desde argumentos`);
+    } else {
+        console.error(`[ERROR] Puerto inválido: ${process.argv[2]}`);
+        console.error(`Uso: node server.js [puerto_tcp_servidor]`);
+        process.exit(1);
+    }
+}
 
 // WebSocket Server
 const wss = new WebSocket.Server({ port: WS_PORT });
 
 console.log(`[WS SERVER] Escuchando en puerto ${WS_PORT}`);
-console.log('[INFO] Bridge WebSocket <-> TCP iniciado');
+console.log(`[INFO] Bridge WebSocket <-> TCP iniciado`);
+console.log(`[INFO] Conectando a servidor TCP en ${TCP_HOST}:${TCP_PORT}`);
 console.log('[INFO] Abre el navegador en: http://localhost:3000');
 
 wss.on('connection', (ws) => {

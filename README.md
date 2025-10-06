@@ -11,21 +11,29 @@ El sistema está compuesto por tres componentes principales:
 ### 1. Servidor (C)
 - Servidor TCP multihilo implementado en C
 - Gestiona múltiples conexiones de clientes concurrentes
-- Sistema de autenticación y roles (Admin/Observer)
+- Sistema de autenticación basado en tokens y roles (Admin/Observer)
+- Gestión de sesiones con tracking de IP y puerto
 - Envía datos de telemetría cada 10 segundos a todos los clientes autenticados
 - Procesa comandos de control del vehículo
+- Sistema de logging automático a archivo configurable (server.log por defecto)
+- Parámetros configurables: puerto y archivo de log
+- Monitoreo de respuestas de clientes con desconexión por errores consecutivos
 
 ### 2. Clientes Python
 - **Cliente Observador**: Visualiza datos de telemetría en tiempo real
 - **Cliente Administrador**: Envía comandos y gestiona usuarios
 - Interfaz gráfica usando CustomTkinter
 - Autenticación automática al servidor
+- Sistema de verificación de respuestas (STATUS OK/ERROR)
+- Hilo dedicado para enviar estado al servidor cada 2 segundos
 
 ### 3. Cliente JavaScript
 - Cliente web unificado con interfaz de login
 - Interfaz adaptativa según el rol (Admin/Observer)
 - Comunicación mediante WebSocket-TCP bridge
 - Visualización de telemetría y panel de control para administradores
+- Sistema de verificación de respuestas (STATUS OK/ERROR)
+- Intervalo automático para reportar estado al servidor cada 2 segundos
 
 ## Protocolo PTT (Proprietary Telemetry Transfer)
 
@@ -54,15 +62,18 @@ Total: 168 bytes por mensaje
 - **DATA**: Datos de telemetría (formato: `speed=X;dir=Y;battery=Z;temp=W`)
 - **COMMAND**: Comando de control del vehículo
 - **LIST**: Solicitud de lista de usuarios conectados (solo Admin)
+- **STATUS**: Verificación de estado del cliente (formato: `OK` o `ERROR`)
 
 ### Flujo de Comunicación
 
 1. **Conexión**: Cliente se conecta al servidor TCP en el puerto 2000
 2. **Autenticación**: Cliente envía mensaje LOGIN con credenciales
-3. **Respuesta**: Servidor valida y responde con OK o ERROR
+3. **Respuesta**: Servidor valida y responde con OK (incluyendo token y rol) o ERROR
 4. **Telemetría**: Servidor envía datos cada 10 segundos a clientes autenticados
-5. **Comandos**: Clientes Admin pueden enviar comandos COMMAND
-6. **Desconexión**: Cliente cierra conexión y servidor limpia sesión
+5. **Verificación**: Cliente envía STATUS (OK/ERROR) cada 2 segundos
+6. **Monitoreo**: Servidor cuenta errores consecutivos (desconexión tras 3 errores)
+7. **Comandos**: Clientes Admin pueden enviar comandos COMMAND
+8. **Desconexión**: Cliente cierra conexión y servidor limpia sesión
 
 ## Sistema de Autenticación
 
@@ -89,6 +100,40 @@ El sistema incluye los siguientes usuarios por defecto:
 - Visualizar datos de telemetría en tiempo real
 - Sin permisos para enviar comandos
 - Sin acceso a panel de administración
+
+## Sistema de Verificación de Respuestas
+
+El sistema implementa un mecanismo de monitoreo bidireccional para garantizar la salud de las conexiones:
+
+### Funcionamiento
+
+1. **Variable Global de Estado**: Cada cliente mantiene una variable `response` con valores:
+   - `""` (vacío): Sin respuesta pendiente
+   - `"OK"`: Mensaje procesado correctamente
+   - `"ERROR"`: Error al procesar mensaje
+
+2. **Hilo de Verificación**: Los clientes ejecutan un hilo que:
+   - Verifica cada 2 segundos si hay respuesta pendiente
+   - Envía mensaje STATUS al servidor con el estado actual
+   - Limpia la variable después de enviar
+
+3. **Procesamiento de Mensajes**: 
+   - Al recibir telemetría correctamente: `response = "OK"`
+   - Al recibir comando correctamente: `response = "OK"`
+   - Error de parseo o procesamiento: `response = "ERROR"`
+
+4. **Monitoreo del Servidor**:
+   - Recibe mensajes STATUS de cada cliente
+   - Cuenta errores consecutivos por cliente
+   - Desconecta automáticamente clientes con más de 2 errores consecutivos
+   - Resetea contador cuando recibe STATUS OK
+
+### Beneficios
+
+- Detección temprana de clientes con problemas
+- Limpieza automática de conexiones defectuosas
+- Logs detallados del estado de cada cliente
+- Mayor robustez del sistema ante fallos
 
 ## Datos de Telemetría
 
@@ -136,18 +181,44 @@ Los administradores pueden enviar los siguientes comandos:
 
 ### 1. Servidor C
 
+#### Opción 1: Usar Makefile (Recomendado)
+
 ```bash
 # Navegar al directorio del servidor
 cd server
 
 # Compilar el servidor
-gcc -o server main.c car.c auth.c protocol.c -pthread
+make
 
-# Ejecutar el servidor
-./server
+# Ejecutar con parámetros por defecto (puerto 2000, log: server.log)
+make run
+
+# O ejecutar manualmente con parámetros personalizados
+./server <puerto> <archivo_log>
+./server 3000 mi_log.txt
+
+# Limpiar archivos compilados y logs
+make clean
 ```
 
-El servidor se iniciará en el puerto 2000 por defecto.
+#### Opción 2: Compilación Manual
+
+```bash
+# Navegar al directorio del servidor
+cd server
+
+# Compilar el servidor
+gcc -o server main.c car.c auth.c protocol.c logger.c -pthread
+
+# Ejecutar el servidor
+./server              # Puerto 2000, log: server.log
+./server 3000         # Puerto 3000, log: server.log
+./server 3000 custom.log  # Puerto 3000, log: custom.log
+```
+
+El servidor acepta dos parámetros opcionales:
+1. **Puerto TCP**: Puerto de escucha (por defecto: 2000)
+2. **Archivo de log**: Nombre del archivo para logging (por defecto: server.log)
 
 ### 2. Cliente Python - Observador
 
@@ -167,8 +238,11 @@ source venv/bin/activate
 # Instalar dependencias
 pip install -r requirements.txt
 
-# Ejecutar cliente observador
+# Ejecutar cliente observador (puerto por defecto 2000)
 python client.py
+
+# O especificar puerto del servidor
+python client.py 3000
 ```
 
 El cliente se autenticará automáticamente como `observer/observer123`.
@@ -179,8 +253,11 @@ El cliente se autenticará automáticamente como `observer/observer123`.
 # En el mismo directorio clients/python_client
 # Con el entorno virtual activado
 
-# Ejecutar cliente administrador
+# Ejecutar cliente administrador (puerto por defecto 2000)
 python admin_client.py
+
+# O especificar puerto del servidor
+python admin_client.py 3000
 ```
 
 Credenciales por defecto: `admin/admin123`
@@ -194,14 +271,61 @@ cd clients/js_client
 # Instalar dependencias
 npm install
 
-# Terminal 1: Iniciar el WebSocket-TCP bridge
-npm run server
+# Terminal 1: Iniciar el WebSocket-TCP bridge (puerto por defecto 2000)
+node server.js
+
+# O especificar puerto del servidor TCP
+node server.js 3000
 
 # Terminal 2: Iniciar el servidor HTTP
 npx http-server -p 3000
 
 # Abrir navegador
 # http://localhost:3000
+```
+
+## Configuración de Puertos
+
+Todos los componentes del sistema aceptan el puerto como parámetro de línea de comandos, permitiendo flexibilidad en la configuración.
+
+### Puertos por Defecto
+
+- **Servidor TCP**: 2000
+- **Bridge WebSocket**: 8080 (para navegador)
+- **Servidor HTTP**: 3000 (para navegador)
+
+### Sincronización de Puertos
+
+Para que el sistema funcione correctamente, todos los clientes deben conectarse al mismo puerto donde está ejecutándose el servidor:
+
+```bash
+# Ejemplo 1: Usando puerto por defecto (2000)
+# Terminal 1: Servidor
+cd server
+./server
+
+# Terminal 2: Cliente Python
+cd clients/python_client
+python client.py
+
+# Terminal 3: Bridge JavaScript
+cd clients/js_client
+node server.js
+```
+
+```bash
+# Ejemplo 2: Usando puerto personalizado (3000)
+# Terminal 1: Servidor
+cd server
+./server 3000 server.log
+
+# Terminal 2: Cliente Python
+cd clients/python_client
+python client.py 3000
+
+# Terminal 3: Bridge JavaScript
+cd clients/js_client
+node server.js 3000
 ```
 
 ## Uso del Sistema
@@ -236,27 +360,33 @@ Netdrive/
 │   ├── main.c                 # Lógica principal y manejo de clientes
 │   ├── car.c                  # Lógica del vehículo y telemetría
 │   ├── car.h
-│   ├── auth.c                 # Sistema de autenticación
+│   ├── auth.c                 # Sistema de autenticación y sesiones
 │   ├── auth.h
 │   ├── protocol.c             # Implementación del protocolo PTT
-│   └── protocol.h
+│   ├── protocol.h
+│   ├── logger.c               # Sistema de logging a archivo
+│   ├── logger.h
+│   ├── Makefile               # Automatización de compilación
+│   └── server.log             # Archivo de logs (generado automáticamente)
 │
 ├── clients/
 │   ├── python_client/         # Clientes en Python
-│   │   ├── client.py          # Cliente observador
+│   │   ├── client.py          # Cliente observador con verificación
 │   │   ├── admin_client.py    # Cliente administrador
 │   │   ├── telemetry_client.py # GUI para telemetría
 │   │   ├── car.py             # Modelo del carro
+│   │   ├── requirements.txt   # Dependencias de Python
 │   │   └── images/
 │   │       └── auto.png
 │   │
 │   └── js_client/             # Cliente web en JavaScript
-│       ├── index.html         # Interfaz unificada (login + dashboard)
+│       ├── index.html         # Interfaz unificada con verificación
 │       ├── server.js          # WebSocket-TCP bridge
 │       ├── package.json
 │       └── images/
 │           └── auto.png
 │
+├── .gitignore                 # Archivos a ignorar en git
 └── README.md                  # Este archivo
 ```
 
@@ -276,16 +406,29 @@ Netdrive/
 ### Gestión de Sesiones
 - Cada cliente autenticado recibe un token único
 - Las sesiones se mantienen por file descriptor
+- Tracking de IP, puerto y tiempo de conexión
 - Las sesiones se limpian al desconectarse el cliente
 
 ### Manejo de Errores
 - El servidor valida todos los mensajes recibidos
+- Validación de formato de protocolo PTT
 - Los clientes manejan desconexiones inesperadas
+- Sistema de verificación de respuestas con contador de errores
+- Desconexión automática tras 3 errores consecutivos
 - Logs detallados para debugging
+
+### Sistema de Logging
+- Todos los eventos se registran en consola y archivo (configurable)
+- Archivo de log por defecto: server.log
+- Logs automáticos con timestamp implícito
+- Registro de conexiones, autenticaciones, comandos y errores
+- Función centralizada log_printf() para logging consistente
 
 ## Logs del Sistema
 
-El servidor genera logs en consola para monitorear la actividad:
+El servidor genera logs en consola y archivo (server.log por defecto) para monitorear la actividad:
+
+### Ejemplos de Logs
 
 ```
 [SERVIDOR] Escuchando en el puerto 2000...
@@ -293,8 +436,31 @@ El servidor genera logs en consola para monitorear la actividad:
 [HILO] Cliente conectado (fd=4) desde 127.0.0.1:12345
 [AUTH] Login exitoso: admin (role=2) fd=4
 [TELEMETRIA] Enviada a admin (fd=4)
+[STATUS] (fd=4) OK
 [COMMAND] Ejecutado 'SPEED UP' por admin fd=4
 [CAR] Velocidad incrementada a 10 km/h
+[STATUS] (fd=4) OK
+[LIST] Usuarios solicitados por admin fd=4
+[AUTH] Lista de usuarios generada: 'admin:ADMIN:127.0.0.1'
+```
+
+### Logs de Verificación de Respuestas
+
+```
+[STATUS] (fd=5) OK                    # Cliente funcionando correctamente
+[STATUS] (fd=5) ERROR                 # Cliente reporta error
+[STATUS] (fd=5) ERROR                 # Segundo error consecutivo
+[STATUS] (fd=5) ERROR                 # Tercer error consecutivo
+[STATUS] Conexión finalizada (fd=5) límite de errores alcanzado
+```
+
+### Logs de Cliente (JavaScript/Python)
+
+```
+[CLIENTE] No hay respuestas pendientes
+[MESSAGE] Mensaje recibido: DATA | speed=120;dir=45;battery=85;temp=22.5
+[STATUS] Enviando: OK
+[RESPONSE THREAD] Iniciado - verificando cada 2s
 ```
 
 ## Solución de Problemas
@@ -319,6 +485,18 @@ El servidor genera logs en consola para monitorear la actividad:
 - Verificar que el usuario sea ADMIN
 - Revisar logs del servidor para ver si el comando se recibe
 - Verificar que el cliente esté autenticado
+
+### Cliente se desconecta automáticamente
+- Revisar el archivo de log (server.log) para ver mensajes STATUS ERROR
+- Verificar que el cliente esté procesando mensajes correctamente
+- El servidor desconecta tras 3 errores consecutivos
+- Verificar que el formato de mensajes sea correcto (PTT...END)
+
+### No se genera archivo de log
+- Verificar que el servidor tenga permisos de escritura en el directorio
+- El archivo se crea automáticamente al iniciar el servidor (server.log por defecto)
+- Verificar que logger.c esté compilado en el ejecutable
+- Verificar los parámetros de línea de comandos si se especificó un nombre personalizado
 
 ## Desarrollo y Contribución
 
