@@ -2,7 +2,7 @@
 
 ## Descripción del Proyecto
 
-NetDrive es un sistema completo de telemetría y control para un vehículo autónomo. El sistema permite a múltiples usuarios conectarse simultáneamente para visualizar datos de telemetría en tiempo real y, en el caso de administradores, enviar comandos de control al vehículo.
+NetDrive es un sistema completo de telemetría y control para un vehículo autónomo. El sistema permite a múltiples usuarios conectarse simultáneamente para visualizar datos de telemetría en tiempo real y, en el caso de administradores, enviar comandos de control al vehículo del codigo.
 
 ## Arquitectura del Sistema
 
