@@ -56,7 +56,7 @@ def parse_response(raw_data):
             
             # Calcular offsets correctos
             # PTT = 3 bytes (no 4!)
-            action_start = ptt_idx + 3  # ✅ CORREGIDO: PTT son solo 3 bytes
+            action_start = ptt_idx + 3  # CORREGIDO: PTT son solo 3 bytes
             action_end = action_start + 12  # ACTION son 12 bytes
             data_start = action_end  # DATA empieza después del ACTION
             data_end = end_idx  # DATA termina donde empieza END

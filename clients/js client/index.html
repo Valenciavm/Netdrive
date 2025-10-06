@@ -669,7 +669,7 @@
                     currentRole = roleMatch ? roleMatch[1] : 'OBSERVER';
                     
                     showDashboard();
-                    startResponseThread();  // ✅ INICIAR HILO DE RESPUESTAS
+                    startResponseThread();  // INICIAR HILO DE RESPUESTAS
                     return;
                 }
 
@@ -686,10 +686,10 @@
                 if (parsed.action === 'DATA') {
                     try {
                         updateTelemetry(parsed.data);
-                        clientResponse = "OK";  // ✅ Telemetría procesada correctamente
+                        clientResponse = "OK";  // Telemetría procesada correctamente
                     } catch (error) {
                         console.error('[TELEMETRY] Error actualizando:', error);
-                        clientResponse = "ERROR";  // ✅ Error procesando telemetría
+                        clientResponse = "ERROR";  // Error procesando telemetría
                     }
                     return;
                 }
@@ -697,13 +697,13 @@
                 // Handle command responses
                 if (parsed.action === 'OK' && parsed.data.includes('COMMAND_OK')) {
                     showCommandStatus('Comando ejecutado correctamente', 'success');
-                    clientResponse = "OK";  // ✅ Comando procesado
+                    clientResponse = "OK";  // Comando procesado
                     return;
                 }
 
                 if (parsed.action === 'DENIED') {
                     showCommandStatus('Permiso denegado', 'error');
-                    clientResponse = "OK";  // ✅ Mensaje recibido (aunque denegado)
+                    clientResponse = "OK";  // Mensaje recibido (aunque denegado)
                     return;
                 }
 
@@ -712,7 +712,7 @@
                     console.log('[LIST] Lista de usuarios recibida:', parsed.data);
                     awaitingUserList = false;
                     displayUsers(parsed.data);
-                    clientResponse = "OK";  // ✅ Lista procesada
+                    clientResponse = "OK";  // Lista procesada
                     return;
                 }
             };
@@ -722,11 +722,11 @@
                 showLoginStatus('Error de conexión', 'error');
                 document.getElementById('loginBtn').disabled = false;
                 awaitingAuth = false;
-                clientResponse = "ERROR";  // ✅ Error de conexión
+                clientResponse = "ERROR";  // Error de conexión
             };
 
             socket.onclose = () => {
-                stopResponseThread();  // ✅ Detener hilo al cerrar conexión
+                stopResponseThread();  // Detener hilo al cerrar conexión
                 
                 if (awaitingAuth) {
                     showLoginStatus('Conexión cerrada', 'error');
@@ -776,14 +776,14 @@
         }
 
         function logout() {
-            stopResponseThread();  // ✅ Detener hilo al logout
+            stopResponseThread();  // Detener hilo al logout
             
             if (socket) {
                 socket.close();
             }
             currentUser = null;
             currentRole = null;
-            clientResponse = "";  // ✅ Limpiar respuesta pendiente
+            clientResponse = "";  // Limpiar respuesta pendiente
             document.getElementById('dashboard').classList.add('hidden');
             document.getElementById('loginScreen').classList.remove('hidden');
             document.getElementById('username').value = '';
